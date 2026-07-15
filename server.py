@@ -1,4 +1,3 @@
-# server.py — полная версия с кнопкой и полем ввода (для Render)
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
 import json
@@ -13,7 +12,7 @@ html = """
     <title>KRUTYSH CHAT</title>
     <style>
         body { background: #0a0a0a; color: #00ff88; font-family: monospace; }
-        #messages { height: 400px; overflow-y: scroll; border: 1px solid #00ff88; padding: 10px; }
+        #messages { height: 400px; overflow-y: scroll; border: 1px solid #00ff88; padding: 10px; margin-bottom: 10px; }
         .msg { margin: 5px 0; }
         .time { color: #666; font-size: 12px; }
         input { background: #1a1a1a; color: #00ff88; border: 1px solid #00ff88; padding: 10px; width: 70%; }
@@ -21,43 +20,44 @@ html = """
     </style>
 </head>
 <body>
-    <h1>🔥 KRUTYSH CHAT 🔥</h1>
+    <h1>🔥 ХУЙ CHAT 🔥</h1>
     <div id="messages"></div>
     <input type="text" id="msgInput" placeholder="Пиши сюда, блять...">
     <button onclick="sendMsg()">ОТПРАВИТЬ</button>
 
     <script>
-        let username = prompt("Твой ник:") || "Аноним";
-        // Автоматически определяем wss:// если страница открыта по HTTPS
+        const username = prompt("Твой ник:") || "Аноним";
         const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
         const ws = new WebSocket(protocol + "//" + window.location.host + "/ws");
 
         ws.onopen = () => {
+            console.log("Соединение открыто!");
             ws.send(JSON.stringify({ type: "join", username: username }));
         };
 
         ws.onmessage = (event) => {
-            const msg = JSON.parse(event.data);
-            if (msg.type === "history") {
-                document.getElementById("messages").innerHTML = "";
-                msg.messages.forEach(m => addMessage(m));
-            } else if (msg.type === "message") {
-                addMessage(msg);
+            console.log("Сообщение получено:", event.data);
+            const data = JSON.parse(event.data);
+            if (data.type === "message") {
+                const div = document.createElement("div");
+                div.className = "msg";
+                div.innerHTML = `<span class="time">[${data.time || ""}]</span> <strong>${data.username}:</strong> ${data.text}`;
+                document.getElementById("messages").appendChild(div);
+                document.getElementById("messages").scrollTop = document.getElementById("messages").scrollHeight;
             }
         };
 
-        function addMessage(m) {
-            const div = document.createElement("div");
-            div.className = "msg";
-            div.innerHTML = `<span class="time">[${m.time || ""}]</span> <strong>${m.username}:</strong> ${m.text}`;
-            document.getElementById("messages").appendChild(div);
-            document.getElementById("messages").scrollTop = document.getElementById("messages").scrollHeight;
-        }
+        ws.onerror = (error) => {
+            console.error("WebSocket ошибка:", error);
+            alert("Ошибка WebSocket! Смотри консоль.");
+        };
 
         function sendMsg() {
             const input = document.getElementById("msgInput");
-            if (!input.value.trim()) return;
-            ws.send(JSON.stringify({ type: "message", text: input.value }));
+            const text = input.value.trim();
+            if (!text) return;
+            console.log("Отправляем:", text);
+            ws.send(JSON.stringify({ type: "message", text: text }));
             input.value = "";
         }
 
@@ -86,9 +86,9 @@ async def websocket_endpoint(websocket: WebSocket):
             if msg.get("type") == "join":
                 username = msg.get("username", "Аноним")
                 active_connections.append(websocket)
-                # Отправить историю (5 последних сообщений)
-                # Здесь можно добавить реальную историю
+                print(f"Пользователь {username} подключился")
             elif msg.get("type") == "message":
+                print(f"Сообщение от {username}: {msg.get('text')}")
                 for conn in active_connections:
                     if conn != websocket:
                         await conn.send_text(json.dumps({
@@ -100,3 +100,4 @@ async def websocket_endpoint(websocket: WebSocket):
     except WebSocketDisconnect:
         if websocket in active_connections:
             active_connections.remove(websocket)
+            print(f"Пользователь {username} отключился")
